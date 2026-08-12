@@ -1,51 +1,37 @@
 ```
-# Dependencies
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-venv/
-env/
-ENV/
-.venv/
+# Dependency directories
+vendor/
+node_modules/
+
+# Laravel/Lumen specific
+bootstrap/cache/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+composer.lock
+
+# Environment files
 .env
 .env.local
 .env.*
+!.env.example
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Alembic
-alembic/versions/*.py
-
-# Logs
-*.log
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# Log files
+*.log
+
+# Temporary files
 *.tmp
+Thumbs.db
+.DS_Store
 
-# Coverage
-.coverage
-htmlcov/
-coverage/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
+# Build artifacts
+dist/
+build/
+target/
 ```

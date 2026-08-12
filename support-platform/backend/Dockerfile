@@ -1,33 +1,40 @@
-FROM python:3.11-slim
-
-WORKDIR /app
+FROM php:8.2-fpm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
+    git \
     curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    unzip \
+    default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy application code
+# Create system user
+RUN useradd -G www-data,root -u 1000 -d /home/devuser devuser
+RUN mkdir -p /home/devuser/.composer && \
+    chown -R devuser:devuser /home/devuser/.composer
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy existing application files
 COPY . .
 
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /app
-USER appuser
+# Set permissions
+RUN chown -R devuser:devuser /var/www/html \
+    && chmod -R 755 /var/www/html/storage 2>/dev/null || true
 
-# Expose port
-EXPOSE 8000
+# Expose port 9000 for PHP-FPM
+EXPOSE 9000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Run application
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command
+CMD ["php-fpm"]

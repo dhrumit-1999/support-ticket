@@ -1,90 +1,89 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: support_postgres
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: support_mysql
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: support_platform
+      MYSQL_ROOT_PASSWORD: rootpassword123
+      MYSQL_DATABASE: support_platform
+      MYSQL_USER: support_user
+      MYSQL_PASSWORD: support_pass123
+    ports:
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - mysql_data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    networks:
+      - support_network
 
-  # Redis Cache/Queue
-  redis:
-    image: redis:7-alpine
-    container_name: support_redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # MinIO (S3-compatible storage for local development)
-  minio:
-    image: minio/minio:latest
-    container_name: support_minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  # Backend API
-  backend:
+  # PHP Application (Laravel)
+  php:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
-    container_name: support_backend
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/support_platform
-      REDIS_URL: redis://redis:6379/0
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_S3_BUCKET_NAME: support-platform
-      AWS_S3_REGION: us-east-1
-      AWS_S3_ENDPOINT_URL: http://minio:9000
-      SECRET_KEY: dev-secret-key-change-in-production
-      DEBUG: "true"
+    container_name: support_php
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ../backend:/var/www/html
+      - ../public:/var/www/public
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    command: >
-      sh -c "pip install -r requirements.txt &&
-             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - mysql
+    environment:
+      APP_ENV: local
+      APP_DEBUG: true
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: support_platform
+      DB_USERNAME: support_user
+      DB_PASSWORD: support_pass123
+    command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+    networks:
+      - support_network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: support_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ../public:/var/www/public
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+    networks:
+      - support_network
+
+  # phpMyAdmin (Optional - for development)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: support_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: rootpassword123
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - support_network
 
 volumes:
-  postgres_data:
-  minio_data:
+  mysql_data:
+    driver: local
 
 networks:
-  default:
-    name: support-network
+  support_network:
+    driver: bridge
